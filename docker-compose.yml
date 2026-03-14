@@ -1,0 +1,34 @@
+version: "3.10"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: FastAPI_Backend/Dockerfile
+    image: ghcr.io/rajat-prasad/diet-backend:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - project_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./react_frontend
+      dockerfile: Dockerfile
+    image: ghcr.io/rajat-prasad/diet-react-frontend:latest
+    ports:
+      - "80:80"
+    networks:
+      - project_network
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  project_network:
