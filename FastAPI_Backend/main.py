@@ -43,6 +43,7 @@ app.add_middleware(
         "http://localhost:5173",
         "https://radiant-charm-production-2e91.up.railway.app",
         "https://diet-recommendation-4gs8.vercel.app",
+        "https://diet-recommendation-4gs8.vercel.app/diet",
         "http://localhost",
         "http://localhost:80",
     ],
