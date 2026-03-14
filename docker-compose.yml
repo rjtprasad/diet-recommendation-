@@ -8,10 +8,12 @@ services:
     image: ghcr.io/rjtprasad/diet-backend:latest
     ports:
       - "8080:8080"
+    environment:
+      - PORT=8080
     networks:
       - project_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

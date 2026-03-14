@@ -28,4 +28,4 @@ ENV PORT 8080
 # CMD automatically checks if server is up
 
 # Start uvicorn using dynamic PORT
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]

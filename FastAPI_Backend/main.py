@@ -1,6 +1,9 @@
+import logging
 import os
 import re
+import uvicorn
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, List, Literal, Optional
 
 import pandas as pd
@@ -28,10 +31,34 @@ async def lifespan(app: FastAPI):
         # Pre-process ingredient strings into frozensets once at startup.
         # Enables fast set-based filtering in extract_ingredient_filtered_data()
         # instead of scanning every row with a compound regex on each request.
-        dataset = pd.read_csv(_DATASET_PATH, compression='gzip')
-        dataset['_ingredients_parsed'] = dataset['RecipeIngredientParts'].apply(
-            lambda x: frozenset(s.lower() for s in re.findall(r'"([^"]*)"', x))
-        )
+        try:
+            dataset_path_obj = Path(_DATASET_PATH)
+
+            if not dataset_path_obj.exists():
+                raise FileNotFoundError(f'{_DATASET_PATH} does not exist')
+
+            # autosense gzip by magic bytes (0x1f 0x8b); avoids relying on extension
+            is_gzipped = False
+            with open(_DATASET_PATH, 'rb') as f:
+                header = f.read(2)
+                is_gzipped = header == b'\x1f\x8b'
+
+            if is_gzipped:
+                dataset = pd.read_csv(_DATASET_PATH, compression='gzip')
+            else:
+                dataset = pd.read_csv(_DATASET_PATH)
+
+            dataset['_ingredients_parsed'] = dataset['RecipeIngredientParts'].apply(
+                lambda x: frozenset(s.lower() for s in re.findall(r'"([^"]*)"', x))
+            )
+
+            logging.info('Loaded dataset from %s', _DATASET_PATH)
+        except FileNotFoundError as e:
+            logging.exception('Dataset file not found at %s', _DATASET_PATH)
+            raise RuntimeError(f'Dataset not found: {_DATASET_PATH}') from e
+        except Exception as e:
+            logging.exception('Failed to load dataset from %s', _DATASET_PATH)
+            raise RuntimeError('Dataset load failed') from e
     yield
 
 
@@ -43,7 +70,6 @@ app.add_middleware(
         "http://localhost:5173",
         "https://radiant-charm-production-2e91.up.railway.app",
         "https://diet-recommendation-4gs8.vercel.app",
-        "https://diet-recommendation-4gs8.vercel.app/diet",
         "http://localhost",
         "http://localhost:80",
     ],
@@ -128,9 +154,9 @@ class MealPlanOut(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/")
-def home():
-    return {"health_check": "OK"}
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 
 @app.post("/predict/", response_model=PredictionOut)
