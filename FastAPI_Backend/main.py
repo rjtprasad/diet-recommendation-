@@ -42,10 +42,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://radiant-charm-production-2e91.up.railway.app",
+        "https://diet-recommendation-4gs8.vercel.app",
         "http://localhost",
         "http://localhost:80",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["*"],
     allow_headers=["Content-Type"],
 )
 
