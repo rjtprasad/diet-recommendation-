@@ -41,6 +41,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "https://radiant-charm-production-2e91.up.railway.app",
         "http://localhost",
         "http://localhost:80",
     ],

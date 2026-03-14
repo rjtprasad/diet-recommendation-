@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: FastAPI_Backend/Dockerfile
-    image: ghcr.io/rajat-prasad/diet-backend:latest
+    image: ghcr.io/rjtprasad/diet-backend:latest
     ports:
       - "8080:8080"
     networks:
@@ -21,7 +21,7 @@ services:
     build:
       context: ./react_frontend
       dockerfile: Dockerfile
-    image: ghcr.io/rajat-prasad/diet-react-frontend:latest
+    image: ghcr.io/rjtprasad/diet-react-frontend:latest
     ports:
       - "80:80"
     networks:
