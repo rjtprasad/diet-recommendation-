@@ -11,7 +11,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from config import DEFAULT_N_NEIGHBORS, MEALS_CALORIES_PERC, WEIGHT_LOSS_PLANS
+from config import (ACTIVITY_MULTIPLIERS, DEFAULT_N_NEIGHBORS,
+                    MEALS_CALORIES_PERC, WEIGHT_LOSS_PLANS)
+from fastapi import FastAPI, HTTPException
 from image_finder import get_image_url
 from model import output_recommended_recipes, recommend
 from nutrition import build_nutrition_vector, calculate_bmi, calculate_bmr, calculate_tdee
@@ -132,9 +134,20 @@ class PersonData(BaseModel):
     height: float               # cm
     weight: float               # kg
     gender: Literal["Male", "Female"]
-    activity: str               # must be a key in ACTIVITY_MULTIPLIERS
+    activity: Literal[
+        "Little/no exercise",
+        "Light exercise",
+        "Moderate exercise (3-5 days/wk)",
+        "Very active (6-7 days/wk)",
+        "Extra active (very active & physical job)",
+    ]
     number_of_meals: Literal[3, 4, 5]
-    weight_loss: str            # must be a key in WEIGHT_LOSS_PLANS
+    weight_loss: Literal[
+        "Maintain weight",
+        "Mild weight loss",
+        "Weight loss",
+        "Extreme weight loss",
+    ]
 
 
 class MealRecommendation(BaseModel):
@@ -181,31 +194,42 @@ def predict(prediction_input: PredictionIn):
 
 @app.post("/generate-meal-plan/", response_model=MealPlanOut)
 def generate_meal_plan(person: PersonData):
-    bmi = calculate_bmi(person.weight, person.height)
-    bmr = calculate_bmr(person.weight, person.height, person.age, person.gender)
-    maintain_calories = calculate_tdee(bmr, person.activity)
-    factor = WEIGHT_LOSS_PLANS[person.weight_loss]["factor"]
-    target_calories = maintain_calories * factor
+    try:
+        if person.activity not in ACTIVITY_MULTIPLIERS:
+            raise HTTPException(400, detail=f"Invalid activity: {person.activity}")
+        if person.weight_loss not in WEIGHT_LOSS_PLANS:
+            raise HTTPException(400, detail=f"Invalid weight_loss plan: {person.weight_loss}")
 
-    meals = []
-    for meal_name, perc in MEALS_CALORIES_PERC[person.number_of_meals].items():
-        vector = build_nutrition_vector(target_calories * perc, meal_name)
-        recs = recommend(
-            dataset, vector, [],
-            {"n_neighbors": DEFAULT_N_NEIGHBORS, "return_distance": False},
+        bmi = calculate_bmi(person.weight, person.height)
+        bmr = calculate_bmr(person.weight, person.height, person.age, person.gender)
+        maintain_calories = calculate_tdee(bmr, person.activity)
+        factor = WEIGHT_LOSS_PLANS[person.weight_loss]["factor"]
+        target_calories = maintain_calories * factor
+
+        meals = []
+        for meal_name, perc in MEALS_CALORIES_PERC[person.number_of_meals].items():
+            vector = build_nutrition_vector(target_calories * perc, meal_name)
+            recs = recommend(
+                dataset, vector, [],
+                {"n_neighbors": DEFAULT_N_NEIGHBORS, "return_distance": False},
+            )
+            recipes = output_recommended_recipes(recs) if recs is not None else []
+            for recipe in recipes:
+                recipe['image_url'] = get_image_url(recipe['Name'])
+            meals.append(MealRecommendation(
+                meal_name=meal_name,
+                recipes=recipes,
+            ))
+
+        return MealPlanOut(
+            bmi=bmi,
+            bmr=round(bmr, 2),
+            maintain_calories=round(maintain_calories),
+            target_calories=round(target_calories),
+            meals=meals,
         )
-        recipes = output_recommended_recipes(recs) if recs is not None else []
-        for recipe in recipes:
-            recipe['image_url'] = get_image_url(recipe['Name'])
-        meals.append(MealRecommendation(
-            meal_name=meal_name,
-            recipes=recipes,
-        ))
-
-    return MealPlanOut(
-        bmi=bmi,
-        bmr=round(bmr, 2),
-        maintain_calories=round(maintain_calories),
-        target_calories=round(target_calories),
-        meals=meals,
-    )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.exception('generate_meal_plan failed')
+        raise HTTPException(500, detail='Internal server error') from exc
