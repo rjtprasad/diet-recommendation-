@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
@@ -8,7 +9,21 @@ from sklearn.preprocessing import FunctionTransformer
 
 def scaling(dataframe):
     scaler = StandardScaler()
-    prep_data = scaler.fit_transform(dataframe.iloc[:, 6:15].to_numpy())
+    numeric_cols = [
+        'Calories',
+        'FatContent',
+        'SaturatedFatContent',
+        'CholesterolContent',
+        'SodiumContent',
+        'CarbohydrateContent',
+        'FiberContent',
+        'SugarContent',
+        'ProteinContent',
+    ]
+    numeric_df = dataframe[numeric_cols].apply(pd.to_numeric, errors='coerce')
+    if numeric_df.isnull().any().any():
+        raise ValueError('Numeric columns contain non-convertible values')
+    prep_data = scaler.fit_transform(numeric_df.to_numpy())
     return prep_data, scaler
 
 
@@ -67,9 +82,13 @@ def output_recommended_recipes(dataframe):
     # Drop the pre-processed helper column — it's a frozenset, not JSON-serializable.
     output = dataframe.drop(columns=['_ingredients_parsed'], errors='ignore').to_dict("records")
     for recipe in output:
-        recipe['RecipeIngredientParts'] = extract_quoted_strings(recipe['RecipeIngredientParts'])
-        recipe['RecipeInstructions'] = extract_quoted_strings(recipe['RecipeInstructions'])
+        recipe['RecipeIngredientParts'] = extract_quoted_strings(recipe.get('RecipeIngredientParts', ''))
+        recipe['RecipeInstructions'] = extract_quoted_strings(recipe.get('RecipeInstructions', ''))
         # Dataset stores time fields as integers; coerce to str for Pydantic v2 compatibility.
+        # Some recipes may not have the time fields (older/filtered data). Handle safely.
         for time_field in ('CookTime', 'PrepTime', 'TotalTime'):
-            recipe[time_field] = str(recipe[time_field])
+            if time_field in recipe and recipe[time_field] is not None:
+                recipe[time_field] = str(recipe[time_field])
+            else:
+                recipe[time_field] = ''
     return output

@@ -45,16 +45,42 @@ async def lifespan(app: FastAPI):
                 header = f.read(2)
                 is_gzipped = header == b'\x1f\x8b'
 
-            if is_gzipped:
-                dataset = pd.read_csv(_DATASET_PATH, compression='gzip')
-            else:
-                dataset = pd.read_csv(_DATASET_PATH)
-
-            dataset['_ingredients_parsed'] = dataset['RecipeIngredientParts'].apply(
-                lambda x: frozenset(s.lower() for s in re.findall(r'"([^"]*)"', x))
+            dataset = pd.read_csv(
+                _DATASET_PATH,
+                compression='gzip' if is_gzipped else None,
+                usecols=[
+                    'Name',
+                    'RecipeIngredientParts',
+                    'Calories',
+                    'FatContent',
+                    'SaturatedFatContent',
+                    'CholesterolContent',
+                    'SodiumContent',
+                    'CarbohydrateContent',
+                    'FiberContent',
+                    'SugarContent',
+                    'ProteinContent',
+                    'RecipeInstructions',
+                ],
+                dtype={
+                    'Calories': 'float32',
+                    'FatContent': 'float32',
+                    'SaturatedFatContent': 'float32',
+                    'CholesterolContent': 'float32',
+                    'SodiumContent': 'float32',
+                    'CarbohydrateContent': 'float32',
+                    'FiberContent': 'float32',
+                    'SugarContent': 'float32',
+                    'ProteinContent': 'float32',
+                },
+                nrows=10000,
             )
 
-            logging.info('Loaded dataset from %s', _DATASET_PATH)
+            dataset['_ingredients_parsed'] = dataset['RecipeIngredientParts'].apply(
+                lambda x: frozenset(s.lower() for s in re.findall(r'"([^\"]*)"', x))
+            )
+
+            logging.info('Loaded dataset from %s (rows=%s cols=%s)', _DATASET_PATH, *dataset.shape)
         except FileNotFoundError as e:
             logging.exception('Dataset file not found at %s', _DATASET_PATH)
             raise RuntimeError(f'Dataset not found: {_DATASET_PATH}') from e
